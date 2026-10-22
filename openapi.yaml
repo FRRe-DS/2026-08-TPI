@@ -1,0 +1,697 @@
+openapi: 3.0.3
+info:
+  title: API M9 - Reservas de Viajes
+  description: |
+    API del Módulo 9 (M9 - Reservas de Viajes) para el Trabajo Práctico de Desarrollo de Software (UTN FRRe).
+    Gestiona el ciclo de vida completo de reservas programadas con integración hacia M2 (Clientes), M4 (Ubicación), M5 (Despacho), M7 (Tarifas) y M8 (Notificaciones).
+  version: 1.0.0
+  contact:
+    name: Grupo 8
+servers:
+  - url: http://localhost:8089
+    description: Servidor de desarrollo local
+
+paths:
+  /health:
+    get:
+      summary: Healthcheck del servicio
+      description: Comprueba la disponibilidad del servicio y su conectividad con PostgreSQL. No requiere autenticación.
+      responses:
+        '200':
+          description: Servicio saludable y base de datos conectada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: UP
+                  timestamp:
+                    type: string
+                    format: date-time
+                  database:
+                    type: string
+                    example: connected
+        '503':
+          description: Base de datos no disponible o degradada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /reservas:
+    post:
+      summary: Crear una nueva reserva programada
+      description: |
+        Valida anticipación (RF-9.2), cuenta de cliente en M2 (RF-9.3), cobertura y ruta en M4 (RF-9.3/RF-9.4),
+        estima la tarifa con M7 (RF-9.4) y persiste la reserva en estado CONFIRMADA o PENDIENTE.
+        Garantiza estricta idempotencia por claveIdempotencia.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-Id'
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Clave de idempotencia alternativa en encabezado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearReservaRequest'
+      responses:
+        '201':
+          description: Reserva creada exitosamente.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reserva'
+        '200':
+          description: Solicitud idempotente ya procesada previamente (retorna la reserva existente).
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reserva'
+        '400':
+          description: Datos inválidos en la solicitud.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: No autenticado o token JWT inválido.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: No autorizado para crear reserva en nombre de otro cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Error semántico de negocio (cliente bloqueado en M2, fuera de cobertura en M4, anticipación inválida).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: Módulo externo (M2, M4, M7) no disponible tras timeout.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+    get:
+      summary: Listar reservas de un cliente
+      description: Retorna el listado de reservas asociadas a un clienteId obligatorio.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-Id'
+        - name: clienteId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Identificador del cliente cuyas reservas se desean consultar.
+      responses:
+        '200':
+          description: Lista de reservas del cliente (puede estar vacía).
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id-Header'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Reserva'
+        '400':
+          description: Parámetro clienteId ausente o inválido.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: No autenticado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Cliente no autorizado para ver reservas de otro cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /reservas/{id}:
+    get:
+      summary: Consultar una reserva por ID
+      description: Obtiene los detalles de una reserva específica mediante su identificador UUID.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-Id'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID de la reserva.
+      responses:
+        '200':
+          description: Detalles de la reserva encontrada.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reserva'
+        '404':
+          description: Reserva no encontrada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+    patch:
+      summary: Modificar o reprogramar una reserva activa
+      description: |
+        Permite actualizar origen, destino, tipo de vehículo o fecha/hora de una reserva en estado PENDIENTE o CONFIRMADA (RF-9.6).
+        Si cambian origen, destino o tipo de vehículo, se revalida M4 y se recalcula tarifa en M7.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-Id'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModificarReservaRequest'
+      responses:
+        '200':
+          description: Reserva modificada exitosamente.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reserva'
+        '400':
+          description: Datos de modificación inválidos.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Reserva no encontrada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflicto de estado (la reserva está ACTIVADA, CANCELADA o VENCIDA y no puede modificarse).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Nueva fecha u origen/destino fuera de cobertura o no permitidos.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /reservas/{id}/cancelar:
+    post:
+      summary: Cancelar una reserva
+      description: |
+        Cancela una reserva en estado PENDIENTE o CONFIRMADA indicando un motivo válido (mínimo 3 caracteres).
+        No se permite cancelar si ya fue enviada a despacho (ACTIVADA) o si ya finalizó (CANCELADA/VENCIDA).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-Id'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelarReservaRequest'
+      responses:
+        '200':
+          description: Reserva cancelada exitosamente.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reserva'
+        '400':
+          description: Motivo inválido o ausente (mínimo 3 caracteres requeridos).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Reserva no encontrada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: La reserva se encuentra en un estado que no permite cancelación.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /reservas/{id}/historial:
+    get:
+      summary: Consultar historial de eventos de la reserva
+      description: Retorna el registro de auditoría cronológico de todos los cambios de estado y modificaciones sufridas por la reserva (RF-9.12).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-Id'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Historial de eventos de la reserva.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id-Header'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HistorialEvento'
+        '404':
+          description: Reserva no encontrada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /reservas/{id}/activar:
+    post:
+      summary: Activar reserva hacia Solicitud y Despacho (M5)
+      description: |
+        Inicia la búsqueda de conductor enviando la solicitud a M5 con encabezado Idempotency-Key.
+        Solo reservas en estado CONFIRMADA son activables. Si ya fue activada, responde de forma idempotente con la solicitud existente (RF-9.9 / RF-9.10).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-Id'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Solicitud de despacho activada o recuperada por idempotencia.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivarReservaResponse'
+        '404':
+          description: Reserva no encontrada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: La reserva no está en estado CONFIRMADA para ser activada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /reservas/{id}/despacho:
+    post:
+      summary: Webhook de notificación de resultado de despacho (desde M5)
+      description: |
+        Callback consumido por M5 para informar el resultado de la asignación.
+        Si resultado es CONFIRMADA, la reserva transiciona a ACTIVADA. Si es VENCIDA, pasa a VENCIDA.
+        En ambos casos se notifica a M8. El endpoint es estrictamente idempotente.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-Id'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DespachoWebhookRequest'
+      responses:
+        '200':
+          description: Notificación recibida y procesada correctamente (o ignorada si es duplicada).
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id-Header'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: Despacho procesado exitosamente
+                  reservaId:
+                    type: string
+                    format: uuid
+                  estadoActual:
+                    type: string
+                    example: ACTIVADA
+        '400':
+          description: Datos de webhook inválidos.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Reserva no encontrada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT HS256 con claims iss, aud, sub, roles (CLIENTE, CONDUCTOR, OPERADOR, SERVICIO).
+
+  parameters:
+    X-Request-Id:
+      name: X-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Identificador único de correlación y trazabilidad distribuida (UUID).
+
+  headers:
+    X-Request-Id-Header:
+      schema:
+        type: string
+      description: Encabezado de trazabilidad propagado o generado.
+
+  schemas:
+    Direccion:
+      type: object
+      required:
+        - direccion
+        - latitud
+        - longitud
+      properties:
+        direccion:
+          type: string
+          example: Av. Sarmiento 1500
+        latitud:
+          type: number
+          format: double
+          example: -27.4606
+        longitud:
+          type: number
+          format: double
+          example: -58.9839
+        alias:
+          type: string
+          nullable: true
+          example: Casa
+        piso:
+          type: string
+          nullable: true
+          example: 2B
+        indicaciones:
+          type: string
+          nullable: true
+          example: Portón negro
+
+    CrearReservaRequest:
+      type: object
+      required:
+        - claveIdempotencia
+        - clienteId
+        - origen
+        - destino
+        - tipoVehiculo
+        - fechaHora
+        - zonaHoraria
+      properties:
+        claveIdempotencia:
+          type: string
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        clienteId:
+          type: string
+          example: 0b7e2d4a-5c1f-4e8a-9d3b-2f6a1c8e7b40
+        origen:
+          $ref: '#/components/schemas/Direccion'
+        destino:
+          $ref: '#/components/schemas/Direccion'
+        tipoVehiculo:
+          type: string
+          enum: [AUTO, MOTO]
+          example: AUTO
+        fechaHora:
+          type: string
+          format: date-time
+          example: '2026-10-22T18:30:00-03:00'
+        zonaHoraria:
+          type: string
+          example: America/Argentina/Buenos_Aires
+
+    ModificarReservaRequest:
+      type: object
+      properties:
+        origen:
+          $ref: '#/components/schemas/Direccion'
+        destino:
+          $ref: '#/components/schemas/Direccion'
+        tipoVehiculo:
+          type: string
+          enum: [AUTO, MOTO]
+          example: MOTO
+        fechaHora:
+          type: string
+          format: date-time
+          example: '2026-10-22T20:00:00-03:00'
+        zonaHoraria:
+          type: string
+          example: America/Argentina/Buenos_Aires
+
+    CancelarReservaRequest:
+      type: object
+      required:
+        - motivo
+      properties:
+        motivo:
+          type: string
+          minLength: 3
+          example: Cambio de planes personales
+
+    Reserva:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 01929b1c-6f2a-7c3e-9a41-5d8e2f7b0c13
+        claveIdempotencia:
+          type: string
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        clienteId:
+          type: string
+          example: 0b7e2d4a-5c1f-4e8a-9d3b-2f6a1c8e7b40
+        origen:
+          $ref: '#/components/schemas/Direccion'
+        destino:
+          $ref: '#/components/schemas/Direccion'
+        tipoVehiculo:
+          type: string
+          enum: [AUTO, MOTO]
+          example: AUTO
+        fechaHora:
+          type: string
+          format: date-time
+          example: '2026-10-22T18:30:00-03:00'
+        zonaHoraria:
+          type: string
+          example: America/Argentina/Buenos_Aires
+        estado:
+          type: string
+          enum: [PENDIENTE, CONFIRMADA, ACTIVADA, CANCELADA, VENCIDA]
+          example: CONFIRMADA
+        tarifaEstimada:
+          type: number
+          format: float
+          example: 4500.00
+        moneda:
+          type: string
+          example: ARS
+        condicionesTarifa:
+          type: string
+          nullable: true
+          example: Tarifa sujeta a demoras
+        solicitudDespachoId:
+          type: string
+          nullable: true
+          example: sol-m5-883192
+        motivoCancelacion:
+          type: string
+          nullable: true
+          example: null
+        creadoEn:
+          type: string
+          format: date-time
+        actualizadoEn:
+          type: string
+          format: date-time
+
+    HistorialEvento:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        reservaId:
+          type: string
+          format: uuid
+        tipoEvento:
+          type: string
+          example: RESERVA_CREADA
+        estadoAnterior:
+          type: string
+          nullable: true
+          example: null
+        estadoNuevo:
+          type: string
+          example: CONFIRMADA
+        actor:
+          type: string
+          example: 0b7e2d4a-5c1f-4e8a-9d3b-2f6a1c8e7b40
+        detalles:
+          type: object
+        fechaHora:
+          type: string
+          format: date-time
+
+    ActivarReservaResponse:
+      type: object
+      properties:
+        reservaId:
+          type: string
+          format: uuid
+        solicitudId:
+          type: string
+          example: sol-m5-9921
+        estado:
+          type: string
+          example: CONFIRMADA
+        mensaje:
+          type: string
+          example: Solicitud de despacho enviada exitosamente
+
+    DespachoWebhookRequest:
+      type: object
+      required:
+        - solicitud_id
+        - resultado
+        - fecha
+      properties:
+        solicitud_id:
+          type: string
+          example: sol-m5-9921
+        resultado:
+          type: string
+          enum: [CONFIRMADA, VENCIDA]
+          example: CONFIRMADA
+        fecha:
+          type: string
+          format: date-time
+          example: '2026-10-22T18:20:00-03:00'
+
+    ProblemDetails:
+      type: object
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri
+          example: 'https://api.reservas.frre.utn.edu.ar/errors/reserva-invalida'
+        title:
+          type: string
+          example: Anticipación insuficiente
+        status:
+          type: integer
+          example: 422
+        detail:
+          type: string
+          example: La reserva debe realizarse con un mínimo de 30 minutos de anticipación.
+        instance:
+          type: string
+          example: /reservas
+        invalidParams:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              reason:
+                type: string

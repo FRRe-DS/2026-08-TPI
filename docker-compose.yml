@@ -1,0 +1,49 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: m9-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: m9_reservas
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql/01_init_schema.sql:/docker-entrypoint-initdb.d/01_init_schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d m9_reservas"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  m9-reservas:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: m9-backend
+    restart: always
+    ports:
+      - "8089:8089"
+    environment:
+      PORT: 8089
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/m9_reservas
+      JWT_SECRET: clave-secreta-desarrollo-compartida-utn-frre-m9
+      JWT_ISSUER: utn-frre-arquitectura
+      JWT_AUDIENCE: utn-frre-ecosistema
+      ANTICIPACION_MINIMA_MINUTOS: 30
+      ANTICIPACION_MAXIMA_DIAS: 30
+      M2_CLIENTES_URL: http://m2-clientes:8082
+      M4_UBICACION_URL: http://m4-ubicacion:8084
+      M5_DESPACHO_URL: http://m5-despacho:8085
+      M7_TARIFAS_URL: http://m7-tarifas:8087
+      M8_NOTIFICACIONES_URL: http://m8-notificaciones:8088
+      USE_EXTERNAL_MOCKS: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
