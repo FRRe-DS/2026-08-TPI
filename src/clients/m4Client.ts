@@ -36,8 +36,14 @@ export class M4Client {
       });
       return response;
     } catch (err: unknown) {
-      console.warn(`[M4Client] Error llamando a M4 (${(err as Error).message}). Usando fallback mock.`);
-      return this.mockValidarYEstimar(data);
+      if (config.services.useExternalMocks) {
+        return this.mockValidarYEstimar(data);
+      }
+      throw new AppError({
+        status: 503,
+        title: 'Dependencia no disponible',
+        detail: `El Módulo de Ubicación (M4) no respondió: ${(err as Error).message}`
+      });
     }
   }
 

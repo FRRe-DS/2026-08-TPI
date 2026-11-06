@@ -1,6 +1,7 @@
 import { config } from '../config/env';
 import { HttpClient } from './httpClient';
 import { Direccion, TipoVehiculo } from '../types/reservation';
+import { AppError } from '../types/problem';
 
 export interface M5CrearSolicitudRequest {
   reserva_id: string;
@@ -40,8 +41,14 @@ export class M5Client {
       });
       return response;
     } catch (err: unknown) {
-      console.warn(`[M5Client] Error llamando a M5 (${(err as Error).message}). Usando fallback mock.`);
-      return this.mockActivarSolicitud(data);
+      if (config.services.useExternalMocks) {
+        return this.mockActivarSolicitud(data);
+      }
+      throw new AppError({
+        status: 503,
+        title: 'Dependencia no disponible',
+        detail: `El Módulo de Despacho (M5) no respondió: ${(err as Error).message}`
+      });
     }
   }
 

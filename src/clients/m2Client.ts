@@ -29,10 +29,16 @@ export class M2Client {
           detail: `El cliente con ID ${clienteId} no está registrado en M2.`
         });
       }
-      
-      // Fallback a mock si el servicio externo no está levantado en desarrollo
-      console.warn(`[M2Client] No se pudo conectar a M2 (${(err as Error).message}). Usando fallback mock.`);
-      return this.mockVerificarEstadoCuenta(clienteId);
+
+      if (config.services.useExternalMocks) {
+        return this.mockVerificarEstadoCuenta(clienteId);
+      }
+
+      throw new AppError({
+        status: 503,
+        title: 'Dependencia no disponible',
+        detail: `El Módulo de Clientes (M2) no respondió: ${(err as Error).message}`
+      });
     }
   }
 

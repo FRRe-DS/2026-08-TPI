@@ -1,6 +1,7 @@
 import { config } from '../config/env';
 import { HttpClient } from './httpClient';
 import { TipoVehiculo } from '../types/reservation';
+import { AppError } from '../types/problem';
 
 export interface M7EstimarTarifaRequest {
   distancia_km: number;
@@ -33,8 +34,14 @@ export class M7Client {
       });
       return response;
     } catch (err: unknown) {
-      console.warn(`[M7Client] Error llamando a M7 (${(err as Error).message}). Usando fallback mock.`);
-      return this.mockEstimarTarifa(data);
+      if (config.services.useExternalMocks) {
+        return this.mockEstimarTarifa(data);
+      }
+      throw new AppError({
+        status: 503,
+        title: 'Dependencia no disponible',
+        detail: `El Módulo de Tarifas (M7) no respondió: ${(err as Error).message}`
+      });
     }
   }
 
