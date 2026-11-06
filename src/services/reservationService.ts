@@ -182,7 +182,7 @@ export class ReservationService {
       });
     }
 
-    const esAdmin = user.roles.includes('OPERADOR') || user.roles.includes('SERVICIO');
+    const esAdmin = user.roles.includes('OPERADOR') || user.roles.includes('SERVICIO') || user.roles.includes('CONDUCTOR');
     if (!esAdmin && user.sub !== reserva.clienteId) {
       throw new AppError({
         status: 403,
