@@ -25,17 +25,22 @@ export class ReservationService {
     user: JwtUserPayload,
     requestId?: string
   ): Promise<{ reserva: ReservaDTO; esRepeticion: boolean }> {
-    // 1. Verificación de Idempotencia previa (RF-9.10)
+    // 1. Verificación de Idempotencia previa (RF-9.10 / RNF-09)
     const existenteIdempotente = await IdempotencyRepository.obtener(data.claveIdempotencia);
     if (existenteIdempotente) {
+      const reserva = existenteIdempotente.cuerpoRespuesta as ReservaDTO;
+      if (reserva && reserva.clienteId) {
+        this.validarCoincidenciaIdempotencia(reserva, data);
+      }
       return {
-        reserva: existenteIdempotente.cuerpoRespuesta as ReservaDTO,
+        reserva,
         esRepeticion: true
       };
     }
 
     const reservaExistente = await ReservationRepository.obtenerPorClaveIdempotencia(data.claveIdempotencia);
     if (reservaExistente) {
+      this.validarCoincidenciaIdempotencia(reservaExistente, data);
       await IdempotencyRepository.guardar(data.claveIdempotencia, '/reservas', 200, reservaExistente);
       return {
         reserva: reservaExistente,
@@ -421,5 +426,29 @@ export class ReservationService {
   public static async consultarHistorial(id: string, user: JwtUserPayload): Promise<HistorialEventoDTO[]> {
     await this.obtenerPorId(id, user);
     return HistoryRepository.listarPorReserva(id);
+  }
+
+  /**
+   * RNF-09: Validar que una clave de idempotencia repetida coincida exactamente en sus datos
+   */
+  private static validarCoincidenciaIdempotencia(reserva: ReservaDTO, data: CrearReservaDTO): void {
+    const coincideCliente = reserva.clienteId === data.clienteId;
+    const coincideVehiculo = reserva.tipoVehiculo === data.tipoVehiculo;
+    const coincideFecha = new Date(reserva.fechaHora).getTime() === new Date(data.fechaHora).getTime();
+    const coincideOrigen =
+      Math.abs(reserva.origen.latitud - data.origen.latitud) < 0.0001 &&
+      Math.abs(reserva.origen.longitud - data.origen.longitud) < 0.0001;
+    const coincideDestino =
+      Math.abs(reserva.destino.latitud - data.destino.latitud) < 0.0001 &&
+      Math.abs(reserva.destino.longitud - data.destino.longitud) < 0.0001;
+
+    if (!coincideCliente || !coincideVehiculo || !coincideFecha || !coincideOrigen || !coincideDestino) {
+      throw new AppError({
+        status: 409,
+        code: 'CONFLICTO_IDEMPOTENCIA',
+        title: 'Conflicto de idempotencia',
+        detail: 'La clave de idempotencia ya fue utilizada con datos diferentes'
+      });
+    }
   }
 }

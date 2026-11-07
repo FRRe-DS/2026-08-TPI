@@ -18,12 +18,14 @@ export class AppError extends Error {
   public readonly title: string;
   public readonly type: string;
   public readonly detail: string;
+  public readonly code?: string;
   public readonly invalidParams?: InvalidParam[];
 
   constructor(options: {
     status: number;
     title: string;
     detail: string;
+    code?: string;
     type?: string;
     invalidParams?: InvalidParam[];
   }) {
@@ -32,6 +34,7 @@ export class AppError extends Error {
     this.status = options.status;
     this.title = options.title;
     this.detail = options.detail;
+    this.code = options.code;
     this.type = options.type || `https://api.reservas.frre.utn.edu.ar/errors/${this.slugify(options.title)}`;
     this.invalidParams = options.invalidParams;
   }
