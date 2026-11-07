@@ -2,7 +2,7 @@ import { ReservationRepository } from '../repositories/reservationRepository';
 import { HistoryRepository } from '../repositories/historyRepository';
 import { M5Client } from '../clients/m5Client';
 import { M8Client } from '../clients/m8Client';
-import { DespachoWebhookDTO } from '../types/reservation';
+import { DespachoWebhookDTO, ReservaDTO } from '../types/reservation';
 import { JwtUserPayload } from '../types/auth';
 import { AppError } from '../types/problem';
 
@@ -22,7 +22,7 @@ export class ActivationService {
     id: string,
     user: JwtUserPayload,
     requestId?: string
-  ): Promise<ActivarReservaResult> {
+  ): Promise<ReservaDTO> {
     const esAutorizado = user.roles.includes('OPERADOR') || user.roles.includes('SERVICIO');
     if (!esAutorizado) {
       throw new AppError({
@@ -43,12 +43,7 @@ export class ActivationService {
 
     // Idempotencia estricta: si ya posee solicitud_despacho_id, devolvemos la misma sin duplicar hacia M5
     if (reserva.solicitudDespachoId) {
-      return {
-        reservaId: reserva.id,
-        solicitudId: reserva.solicitudDespachoId,
-        estado: reserva.estado,
-        mensaje: 'La reserva ya fue activada previamente en despacho (Idempotente).'
-      };
+      return reserva;
     }
 
     // Validar estado CONFIRMADA
@@ -94,12 +89,7 @@ export class ActivationService {
       }
     });
 
-    return {
-      reservaId: reserva.id,
-      solicitudId: m5Response.solicitud_id,
-      estado: reserva.estado,
-      mensaje: 'Solicitud de despacho enviada exitosamente a M5.'
-    };
+    return (await ReservationRepository.obtenerPorId(reserva.id))!;
   }
 
   /**
