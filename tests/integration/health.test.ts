@@ -21,11 +21,11 @@ describe('Health and Documentation Endpoints', () => {
     expect(res.text).toContain('openapi: 3.0.3');
   });
 
-  it('Ruta inexistente debe retornar RFC 7807 problem+json 404', async () => {
+  it('Ruta inexistente debe retornar formato de error 404', async () => {
     const res = await request(app).get('/ruta-inexistente-xyz');
     expect(res.status).toBe(404);
-    expect(res.headers['content-type']).toContain('application/problem+json');
-    expect(res.body.title).toBe('Recurso no encontrado');
-    expect(res.body.status).toBe(404);
+    expect(res.headers['content-type']).toContain('application/json');
+    expect(res.body.codigo).toBe('NO_ENCONTRADA');
+    expect(res.body.mensaje).toBe('Recurso no encontrado');
   });
 });

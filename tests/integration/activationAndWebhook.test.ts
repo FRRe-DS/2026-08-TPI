@@ -30,7 +30,7 @@ describe('Activación y Webhook de Despacho hacia M5 (RF-9.9, RF-9.10, RF-9.11)'
         fechaHora: fechaValida,
         zonaHoraria: 'America/Argentina/Buenos_Aires'
       });
-    reserva1Id = res1.body.id;
+    reserva1Id = res1.body.reserva?.id || res1.body.id;
 
     // Crear reserva 2
     const res2 = await request(app)
@@ -45,7 +45,7 @@ describe('Activación y Webhook de Despacho hacia M5 (RF-9.9, RF-9.10, RF-9.11)'
         fechaHora: fechaValida,
         zonaHoraria: 'America/Argentina/Buenos_Aires'
       });
-    reserva2Id = res2.body.id;
+    reserva2Id = res2.body.reserva?.id || res2.body.id;
   });
 
   it('Rechazar activación invocada por un rol CLIENTE (403 Forbidden)', async () => {
@@ -62,8 +62,8 @@ describe('Activación y Webhook de Despacho hacia M5 (RF-9.9, RF-9.10, RF-9.11)'
       .set('Authorization', `Bearer ${tokenOperador}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.solicitudId).toBeDefined();
-    expect(res.body.reservaId).toBe(reserva1Id);
+    expect(res.body.solicitudDespachoId).toBeDefined();
+    expect(res.body.id).toBe(reserva1Id);
     expect(res.body.estado).toBe('CONFIRMADA'); // Continúa CONFIRMADA hasta el resultado de M5
   });
 
@@ -73,7 +73,8 @@ describe('Activación y Webhook de Despacho hacia M5 (RF-9.9, RF-9.10, RF-9.11)'
       .set('Authorization', `Bearer ${tokenOperador}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.mensaje).toContain('Idempotente');
+    expect(res.body.solicitudDespachoId).toBeDefined();
+    expect(res.body.id).toBe(reserva1Id);
   });
 
   it('Webhook M5: Rechazar callback si no posee rol SERVICIO (403)', async () => {

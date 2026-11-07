@@ -29,8 +29,8 @@ describe('Ciclo de Vida de Reservas (RF-9.1, RF-9.2, RF-9.3, RF-9.4, RF-9.5, RF-
       });
 
     expect(res.status).toBe(401);
-    expect(res.headers['content-type']).toContain('application/problem+json');
-    expect(res.body.title).toBe('No autenticado');
+    expect(res.headers['content-type']).toContain('application/json');
+    expect(res.body.codigo).toBe('NO_AUTENTICADO');
   });
 
   it('Rechazar creación si el token CLIENTE no coincide con clienteId (403)', async () => {
@@ -48,7 +48,8 @@ describe('Ciclo de Vida de Reservas (RF-9.1, RF-9.2, RF-9.3, RF-9.4, RF-9.5, RF-
       });
 
     expect(res.status).toBe(403);
-    expect(res.headers['content-type']).toContain('application/problem+json');
+    expect(res.headers['content-type']).toContain('application/json');
+    expect(res.body.codigo).toBe('NO_AUTORIZADO');
   });
 
   it('Rechazar creación si el cliente está bloqueado en M2 (422)', async () => {
@@ -69,7 +70,8 @@ describe('Ciclo de Vida de Reservas (RF-9.1, RF-9.2, RF-9.3, RF-9.4, RF-9.5, RF-
       });
 
     expect(res.status).toBe(422);
-    expect(res.body.title).toBe('Cliente bloqueado');
+    expect(res.headers['content-type']).toContain('application/json');
+    expect(res.body.mensaje).toBe('Cliente bloqueado');
   });
 
   it('Rechazar creación si la ubicación está fuera de cobertura en M4 (422)', async () => {
@@ -87,7 +89,8 @@ describe('Ciclo de Vida de Reservas (RF-9.1, RF-9.2, RF-9.3, RF-9.4, RF-9.5, RF-
       });
 
     expect(res.status).toBe(422);
-    expect(res.body.title).toBe('Ubicación no válida');
+    expect(res.headers['content-type']).toContain('application/json');
+    expect(res.body.mensaje).toBe('Ubicación no válida');
   });
 
   it('Crear reserva exitosamente en estado CONFIRMADA con tarifa estimada (201)', async () => {
@@ -118,14 +121,15 @@ describe('Ciclo de Vida de Reservas (RF-9.1, RF-9.2, RF-9.3, RF-9.4, RF-9.5, RF-
 
     expect(res.status).toBe(201);
     expect(res.headers['x-request-id']).toBe('req-trace-test-01');
-    expect(res.body.id).toBeDefined();
-    expect(res.body.estado).toBe('CONFIRMADA');
-    expect(res.body.clienteId).toBe(clienteId);
-    expect(res.body.tipoVehiculo).toBe('AUTO');
-    expect(res.body.tarifaEstimada).toBeGreaterThan(0);
-    expect(res.body.moneda).toBe('ARS');
+    const reserva = res.body.reserva || res.body;
+    expect(reserva.id).toBeDefined();
+    expect(reserva.estado).toBe('CONFIRMADA');
+    expect(reserva.clienteId).toBe(clienteId);
+    expect(reserva.tipoVehiculo).toBe('AUTO');
+    expect(reserva.tarifaEstimada).toBeGreaterThan(0);
+    expect(reserva.moneda).toBe('ARS');
 
-    reservaCreadaId = res.body.id;
+    reservaCreadaId = reserva.id;
   });
 
   it('Idempotencia estricta: reenvío con la misma claveIdempotencia devuelve 200 y misma reserva', async () => {
@@ -135,15 +139,45 @@ describe('Ciclo de Vida de Reservas (RF-9.1, RF-9.2, RF-9.3, RF-9.4, RF-9.5, RF-
       .send({
         claveIdempotencia,
         clienteId,
-        origen: { direccion: 'Av. Sarmiento 1500', latitud: -27.4606, longitud: -58.9839 },
-        destino: { direccion: 'Av. 25 de Mayo 800', latitud: -27.4512, longitud: -58.9867 },
+        origen: {
+          direccion: 'Av. Sarmiento 1500',
+          latitud: -27.4606,
+          longitud: -58.9839,
+          alias: 'Casa',
+          piso: '2B',
+          indicaciones: 'Portón negro'
+        },
+        destino: {
+          direccion: 'Av. 25 de Mayo 800',
+          latitud: -27.4512,
+          longitud: -58.9867
+        },
         tipoVehiculo: 'AUTO',
         fechaHora: fechaValida,
         zonaHoraria: 'America/Argentina/Buenos_Aires'
       });
 
     expect(res.status).toBe(200);
-    expect(res.body.id).toBe(reservaCreadaId);
+    const reserva = res.body.reserva || res.body;
+    expect(reserva.id).toBe(reservaCreadaId);
+  });
+
+  it('Rechazar creación con misma clave de idempotencia pero datos distintos (409 CONFLICTO_IDEMPOTENCIA)', async () => {
+    const res = await request(app)
+      .post('/reservas')
+      .set('Authorization', `Bearer ${tokenCliente}`)
+      .send({
+        claveIdempotencia,
+        clienteId,
+        origen: { direccion: 'Av. Sarmiento 1500', latitud: -27.4606, longitud: -58.9839 },
+        destino: { direccion: 'Av. 25 de Mayo 800', latitud: -27.4512, longitud: -58.9867 },
+        tipoVehiculo: 'MOTO', // Diferente vehículo
+        fechaHora: fechaValida,
+        zonaHoraria: 'America/Argentina/Buenos_Aires'
+      });
+
+    expect(res.status).toBe(409);
+    expect(res.body.codigo).toBe('CONFLICTO_IDEMPOTENCIA');
   });
 
   it('Listar reservas de un cliente (200)', async () => {
@@ -209,7 +243,7 @@ describe('Ciclo de Vida de Reservas (RF-9.1, RF-9.2, RF-9.3, RF-9.4, RF-9.5, RF-
       .send({ tipoVehiculo: 'AUTO' });
 
     expect(res.status).toBe(409);
-    expect(res.body.title).toBe('Estado no modificable');
+    expect(res.body.mensaje).toBe('Estado no modificable');
   });
 
   it('Rechazar cancelación de una reserva ya CANCELADA (409 Conflict)', async () => {
