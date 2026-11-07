@@ -1,6 +1,7 @@
 import { createApp } from './app';
 import { config } from './config/env';
 import { db } from './config/database';
+import { ReservationScheduler } from './services/schedulerService';
 
 const startServer = async () => {
   const app = createApp();
@@ -17,8 +18,14 @@ const startServer = async () => {
     console.log(`=======================================================`);
   });
 
+  // RF-9.9: Iniciar scheduler de activación automática en segundo plano
+  if (config.nodeEnv !== 'test') {
+    ReservationScheduler.start(30000);
+  }
+
   const gracefulShutdown = async (signal: string) => {
     console.log(`\nRecibida señal ${signal}. Cerrando servidor gracefulmente...`);
+    ReservationScheduler.stop();
     server.close(async () => {
       await db.close();
       console.log('Servidor y conexiones a PostgreSQL cerradas.');

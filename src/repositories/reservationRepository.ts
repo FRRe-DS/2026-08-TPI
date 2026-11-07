@@ -201,6 +201,37 @@ export class ReservationRepository {
     }
   }
 
+  public static async obtenerPendientesDeActivacion(ventanaMinutos: number = 20): Promise<ReservaDTO[]> {
+    try {
+      const res = await db.query(
+        `SELECT * FROM reservas
+         WHERE estado = 'CONFIRMADA'
+           AND solicitud_despacho_id IS NULL
+           AND fecha_hora <= NOW() + ($1 || ' minutes')::INTERVAL
+         ORDER BY fecha_hora ASC`,
+        [ventanaMinutos]
+      );
+      return res.rows.map((row) => this.mapEntityToDTO(this.mapRowToEntity(row)));
+    } catch {
+      // Fallback in-memory
+      const now = new Date();
+      const limite = new Date(now.getTime() + ventanaMinutos * 60 * 1000);
+      const list: ReservaEntity[] = [];
+      for (const entity of this.inMemoryReservas.values()) {
+        if (
+          entity.estado === 'CONFIRMADA' &&
+          !entity.solicitud_despacho_id &&
+          entity.fecha_hora <= limite
+        ) {
+          list.push(entity);
+        }
+      }
+      return list
+        .sort((a, b) => a.fecha_hora.getTime() - b.fecha_hora.getTime())
+        .map((e) => this.mapEntityToDTO(e));
+    }
+  }
+
   public static clearMemory(): void {
     this.inMemoryReservas.clear();
   }
