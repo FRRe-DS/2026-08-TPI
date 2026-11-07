@@ -267,7 +267,9 @@ export class ReservationRepository {
       solicitudDespachoId: entity.solicitud_despacho_id,
       motivoCancelacion: entity.motivo_cancelacion,
       creadoEn: entity.creado_en.toISOString(),
-      actualizadoEn: entity.actualizado_en.toISOString()
+      actualizadoEn: entity.actualizado_en.toISOString(),
+      creadaEn: entity.creado_en.toISOString(),
+      modificadaEn: entity.actualizado_en.toISOString()
     };
   }
 }

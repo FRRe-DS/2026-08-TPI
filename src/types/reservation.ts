@@ -66,6 +66,8 @@ export interface ReservaDTO {
   motivoCancelacion: string | null;
   creadoEn: string;
   actualizadoEn: string;
+  creadaEn: string;
+  modificadaEn: string;
 }
 
 export interface CrearReservaDTO {
@@ -101,6 +103,16 @@ export interface HistorialEventoEntity {
   fecha_hora: Date;
 }
 
+export type TipoCambioHistorial =
+  | 'CREACION'
+  | 'CONFIRMACION'
+  | 'MODIFICACION'
+  | 'CANCELACION'
+  | 'ACTIVACION'
+  | 'VENCIMIENTO';
+
+export type RolActorHistorial = 'CLIENTE' | 'OPERADOR' | 'SISTEMA';
+
 export interface HistorialEventoDTO {
   id: string;
   reservaId: string;
@@ -110,6 +122,15 @@ export interface HistorialEventoDTO {
   actor: string | null;
   detalles: Record<string, unknown> | null;
   fechaHora: string;
+  // Campos Grupo 9 (EntradaHistorial):
+  tipoCambio: TipoCambioHistorial;
+  campoModificado: string | null;
+  valorAnterior: string | null;
+  valorNuevo: string | null;
+  actorId: string | null;
+  rolActor: RolActorHistorial;
+  motivo: string | null;
+  fechaCambio: string;
 }
 
 export interface DespachoWebhookDTO {
