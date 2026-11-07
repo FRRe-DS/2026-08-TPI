@@ -63,7 +63,23 @@ export class ReservationController {
       );
 
       const statusCode = esRepeticion ? 200 : 201;
-      res.status(statusCode).json(reserva);
+
+      const condiciones = {
+        confirmacion: 'Inmediata al validar cliente, cobertura y cotización.',
+        modificacion: 'Permitida mientras la reserva no esté en despacho ni activada.',
+        cancelacion: 'Permitida con motivo obligatorio de al menos 3 caracteres.',
+        activacion: 'Se solicitará conductor a M5 al aproximarse la hora del viaje.',
+        tarifa: reserva.condicionesTarifa || 'Tarifa sujeta a demoras de tráfico y variaciones climáticas.'
+      };
+
+      res.status(statusCode).json({
+        mensaje: esRepeticion
+          ? 'Reserva existente recuperada exitosamente'
+          : 'Reserva creada y confirmada correctamente',
+        motivo: reserva.estado === 'PENDIENTE' ? 'Pendiente de confirmación externa' : null,
+        reserva,
+        condiciones
+      });
     } catch (error) {
       next(error);
     }
