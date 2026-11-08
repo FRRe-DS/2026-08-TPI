@@ -14,6 +14,7 @@ import {
 } from '../types/reservation';
 import { JwtUserPayload } from '../types/auth';
 import { AppError } from '../types/problem';
+import { config } from '../config/env';
 
 export class ReservationService {
   /**
@@ -376,6 +377,23 @@ export class ReservationService {
       });
     }
 
+    // Calcular minutos restantes hasta la hora programada del viaje (RF-9.7)
+    const ahora = new Date();
+    const fechaViaje = new Date(reserva.fechaHora);
+    const minutosRestantes = Math.floor((fechaViaje.getTime() - ahora.getTime()) / (1000 * 60));
+    const esCancelacionTardia = minutosRestantes < config.anticipation.freeCancellationMinutes;
+
+    // Integrar con M7 para evaluar/aplicar cargos de cancelación
+    const resultadoFinanciero = await M7Client.procesarCancelacion(
+      {
+        reserva_id: reserva.id,
+        cliente_id: reserva.clienteId,
+        tarifa_estimada: reserva.tarifaEstimada || 0,
+        cancelacion_tardia: esCancelacionTardia,
+        minutos_anticipacion: minutosRestantes
+      },
+      requestId
+    );
     const reservaCancelada = await ReservationRepository.actualizar(id, {
       estado: 'CANCELADA',
       motivo_cancelacion: motivo.trim()
@@ -396,7 +414,12 @@ export class ReservationService {
       estadoAnterior: reserva.estado,
       estadoNuevo: 'CANCELADA',
       actor: user.sub,
-      detalles: { motivo: motivo.trim() }
+      detalles: {
+        motivo: motivo.trim(),
+        cancelacionTardia: esCancelacionTardia,
+        cargoAplicado: resultadoFinanciero.cargo_aplicado,
+        estadoFinanciero: resultadoFinanciero.estado_financiero
+      }
     });
 
     // Notificar a M8

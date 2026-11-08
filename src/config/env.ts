@@ -22,7 +22,8 @@ export const config = {
 
   anticipation: {
     minMinutes: parseInt(process.env.ANTICIPACION_MINIMA_MINUTOS || '30', 10),
-    maxDays: parseInt(process.env.ANTICIPACION_MAXIMA_DIAS || '30', 10)
+    maxDays: parseInt(process.env.ANTICIPACION_MAXIMA_DIAS || '30', 10),
+    freeCancellationMinutes: parseInt(process.env.VENTANA_CANCELACION_SIN_CARGO_MINUTOS || '60', 10)
   },
 
   services: {

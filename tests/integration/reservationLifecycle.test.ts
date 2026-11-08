@@ -255,7 +255,7 @@ describe('Ciclo de Vida de Reservas (RF-9.1, RF-9.2, RF-9.3, RF-9.4, RF-9.5, RF-
     expect(res.status).toBe(409);
   });
 
-  it('Consultar historial de auditoría de la reserva (GET /reservas/:id/historial)', async () => {
+  it('Consultar historial de auditoría de la reserva (GET /reservas/:id/historial) y verificar cancelación sin cargo', async () => {
     const res = await request(app)
       .get(`/reservas/${reservaCreadaId}/historial`)
       .set('Authorization', `Bearer ${tokenCliente}`);
@@ -268,5 +268,54 @@ describe('Ciclo de Vida de Reservas (RF-9.1, RF-9.2, RF-9.3, RF-9.4, RF-9.5, RF-
     expect(eventos).toContain('RESERVA_CREADA');
     expect(eventos).toContain('RESERVA_MODIFICADA');
     expect(eventos).toContain('RESERVA_CANCELADA');
+
+    const eventoCancelacion = res.body.find((e: any) => e.tipoEvento === 'RESERVA_CANCELADA');
+    expect(eventoCancelacion.detalles.cancelacionTardia).toBe(false);
+    expect(eventoCancelacion.detalles.cargoAplicado).toBe(0);
+    expect(eventoCancelacion.detalles.estadoFinanciero).toBe('SIN_CARGO');
+  });
+
+  it('Cancelar reserva fuera de la ventana permitida aplica cargo financiero por cancelación tardía en M7 (RF-9.7)', async () => {
+    // 1. Crear una reserva con 40 minutos de anticipación (válida por > 30 min, pero < 60 min de ventana sin cargo)
+    const fechaTardia = new Date(Date.now() + 40 * 60 * 1000).toISOString();
+    const claveTardia = uuidv4();
+
+    const resCrear = await request(app)
+      .post('/reservas')
+      .set('Authorization', `Bearer ${tokenCliente}`)
+      .send({
+        claveIdempotencia: claveTardia,
+        clienteId,
+        origen: { direccion: 'Av. Alvear 300', latitud: -27.4520, longitud: -58.9860 },
+        destino: { direccion: 'Plaza 25 de Mayo', latitud: -27.4510, longitud: -58.9865 },
+        tipoVehiculo: 'AUTO',
+        fechaHora: fechaTardia,
+        zonaHoraria: 'America/Argentina/Buenos_Aires'
+      });
+
+    expect(resCrear.status).toBe(201);
+    const reservaId = resCrear.body.reserva.id;
+    const tarifaEstimada = resCrear.body.reserva.tarifaEstimada;
+
+    // 2. Cancelar la reserva
+    const resCancelar = await request(app)
+      .post(`/reservas/${reservaId}/cancelar`)
+      .set('Authorization', `Bearer ${tokenCliente}`)
+      .send({ motivo: 'Cancelación sobre la hora por fuerza mayor' });
+
+    expect(resCancelar.status).toBe(200);
+    expect(resCancelar.body.estado).toBe('CANCELADA');
+
+    // 3. Verificar en el historial que M7 calculó el cargo financiero del 30%
+    const resHistorial = await request(app)
+      .get(`/reservas/${reservaId}/historial`)
+      .set('Authorization', `Bearer ${tokenCliente}`);
+
+    expect(resHistorial.status).toBe(200);
+    const eventoCancelacion = resHistorial.body.find((e: any) => e.tipoEvento === 'RESERVA_CANCELADA');
+    expect(eventoCancelacion).toBeDefined();
+    expect(eventoCancelacion.detalles.cancelacionTardia).toBe(true);
+    expect(eventoCancelacion.detalles.estadoFinanciero).toBe('CARGO_APLICADO');
+    expect(eventoCancelacion.detalles.cargoAplicado).toBe(Math.round(tarifaEstimada * 0.3 * 100) / 100);
   });
 });

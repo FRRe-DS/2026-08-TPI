@@ -16,6 +16,22 @@ export interface M7EstimarTarifaResponse {
   condiciones: string;
 }
 
+export interface M7ProcesarCancelacionRequest {
+  reserva_id: string;
+  cliente_id: string;
+  tarifa_estimada: number;
+  cancelacion_tardia: boolean;
+  minutos_anticipacion: number;
+}
+
+export interface M7ProcesarCancelacionResponse {
+  reserva_id: string;
+  cargo_aplicado: number;
+  moneda: string;
+  estado_financiero: 'SIN_CARGO' | 'CARGO_APLICADO';
+  detalle: string;
+}
+
 export class M7Client {
   public static async estimarTarifa(
     data: M7EstimarTarifaRequest,
@@ -43,6 +59,59 @@ export class M7Client {
         detail: `El Módulo de Tarifas (M7) no respondió: ${(err as Error).message}`
       });
     }
+  }
+
+  public static async procesarCancelacion(
+    data: M7ProcesarCancelacionRequest,
+    requestId?: string
+  ): Promise<M7ProcesarCancelacionResponse> {
+    if (config.services.useExternalMocks) {
+      return this.mockProcesarCancelacion(data);
+    }
+
+    const url = `${config.services.m7TarifasUrl}/api/v1/tarifas/cancelacion`;
+    try {
+      const response = await HttpClient.request<M7ProcesarCancelacionResponse>(url, {
+        method: 'POST',
+        body: data,
+        requestId
+      });
+      return response;
+    } catch (err: unknown) {
+      if (config.services.useExternalMocks) {
+        return this.mockProcesarCancelacion(data);
+      }
+      throw new AppError({
+        status: 503,
+        title: 'Dependencia no disponible',
+        detail: `El Módulo de Tarifas (M7) no respondió al procesar la cancelación: ${(err as Error).message}`
+      });
+    }
+  }
+
+  private static mockProcesarCancelacion(
+    data: M7ProcesarCancelacionRequest
+  ): M7ProcesarCancelacionResponse {
+    if (!data.cancelacion_tardia) {
+      return {
+        reserva_id: data.reserva_id,
+        cargo_aplicado: 0,
+        moneda: 'ARS',
+        estado_financiero: 'SIN_CARGO',
+        detalle: 'Cancelación realizada dentro de la ventana permitida sin penalidad.'
+      };
+    }
+
+    // Penalidad del 30% sobre la tarifa estimada por cancelación tardía
+    const cargo = Math.round(data.tarifa_estimada * 0.3 * 100) / 100;
+
+    return {
+      reserva_id: data.reserva_id,
+      cargo_aplicado: cargo,
+      moneda: 'ARS',
+      estado_financiero: 'CARGO_APLICADO',
+      detalle: `Cargo del 30% aplicado por cancelación tardía (${data.minutos_anticipacion} min antes del viaje).`
+    };
   }
 
   private static mockEstimarTarifa(data: M7EstimarTarifaRequest): M7EstimarTarifaResponse {
