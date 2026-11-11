@@ -40,7 +40,7 @@ services:
       M5_DESPACHO_URL: http://m5-despacho:8085
       M7_TARIFAS_URL: http://m7-tarifas:8087
       M8_NOTIFICACIONES_URL: http://m8-notificaciones:8088
-      USE_EXTERNAL_MOCKS: "true"
+      USE_EXTERNAL_MOCKS: "false"
     depends_on:
       db:
         condition: service_healthy

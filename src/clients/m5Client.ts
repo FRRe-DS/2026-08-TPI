@@ -41,9 +41,6 @@ export class M5Client {
       });
       return response;
     } catch (err: unknown) {
-      if (config.services.useExternalMocks) {
-        return this.mockActivarSolicitud(data);
-      }
       throw new AppError({
         status: 503,
         title: 'Dependencia no disponible',

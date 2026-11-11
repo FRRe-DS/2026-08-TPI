@@ -30,10 +30,6 @@ export class M2Client {
         });
       }
 
-      if (config.services.useExternalMocks) {
-        return this.mockVerificarEstadoCuenta(clienteId);
-      }
-
       throw new AppError({
         status: 503,
         title: 'Dependencia no disponible',

@@ -50,9 +50,6 @@ export class M7Client {
       });
       return response;
     } catch (err: unknown) {
-      if (config.services.useExternalMocks) {
-        return this.mockEstimarTarifa(data);
-      }
       throw new AppError({
         status: 503,
         title: 'Dependencia no disponible',
@@ -78,9 +75,6 @@ export class M7Client {
       });
       return response;
     } catch (err: unknown) {
-      if (config.services.useExternalMocks) {
-        return this.mockProcesarCancelacion(data);
-      }
       throw new AppError({
         status: 503,
         title: 'Dependencia no disponible',

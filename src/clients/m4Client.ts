@@ -36,9 +36,6 @@ export class M4Client {
       });
       return response;
     } catch (err: unknown) {
-      if (config.services.useExternalMocks) {
-        return this.mockValidarYEstimar(data);
-      }
       throw new AppError({
         status: 503,
         title: 'Dependencia no disponible',
