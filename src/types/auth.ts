@@ -4,6 +4,8 @@ export type UserRole =
   | 'OPERADOR'
   | 'SERVICIO'
   | 'reservas-be'
+  | 'clientes-be'
+  | 'solicitud-be'
   | (string & {});
 
 export interface KeycloakRealmAccess {

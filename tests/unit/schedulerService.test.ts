@@ -30,7 +30,7 @@ describe('ReservationScheduler (RF-9.9)', () => {
     expect(spyObtener).toHaveBeenCalledWith(20);
     expect(spyActivar).toHaveBeenCalledWith(
       'reserva-sched-001',
-      expect.objectContaining({ roles: ['SERVICIO'] }),
+      expect.objectContaining({ roles: expect.arrayContaining(['reservas-be']) }),
       expect.stringMatching(/^sched-/)
     );
   });

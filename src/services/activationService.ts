@@ -4,6 +4,7 @@ import { M5Client } from '../clients/m5Client';
 import { M8Client } from '../clients/m8Client';
 import { DespachoWebhookDTO, ReservaDTO } from '../types/reservation';
 import { JwtUserPayload } from '../types/auth';
+import { isAuthorizedPrivilegedUser } from '../middlewares/auth';
 import { AppError } from '../types/problem';
 
 export interface ActivarReservaResult {
@@ -23,7 +24,7 @@ export class ActivationService {
     user: JwtUserPayload,
     requestId?: string
   ): Promise<ReservaDTO> {
-    const esAutorizado = user.roles.includes('OPERADOR') || user.roles.includes('SERVICIO');
+    const esAutorizado = isAuthorizedPrivilegedUser(user);
     if (!esAutorizado) {
       throw new AppError({
         status: 403,

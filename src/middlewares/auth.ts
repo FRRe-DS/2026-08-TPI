@@ -133,6 +133,62 @@ export const authenticateToken = async (
   }
 };
 
+/**
+ * Roles reconocidos de servicios backend (M2M) y legacy
+ */
+export const SERVICE_ROLES: string[] = [
+  'SERVICIO',
+  'reservas-be',
+  'clientes-be',
+  'solicitud-be',
+  'conductores-be',
+  'ubicacion-be',
+  'viajes-be',
+  'tarifas-be',
+  'notificaciones-be'
+];
+
+/**
+ * Determina si un rol corresponde a un servicio backend.
+ * Acepta 'SERVICIO', roles explícitos ('reservas-be', 'clientes-be', 'solicitud-be', etc.)
+ * y cualquier rol que termine con el sufijo oficial '-be'.
+ */
+export const isServiceRole = (role: string): boolean => {
+  if (!role || typeof role !== 'string') return false;
+  const normalized = role.trim().toLowerCase();
+  return (
+    normalized === 'servicio' ||
+    normalized.endsWith('-be') ||
+    SERVICE_ROLES.some((sr) => sr.toLowerCase() === normalized)
+  );
+};
+
+/**
+ * Determina si un usuario autenticado posee al menos un rol de servicio backend.
+ */
+export const isServiceUser = (user?: JwtUserPayload): boolean => {
+  if (!user || !Array.isArray(user.roles)) return false;
+  return user.roles.some((role) => isServiceRole(role));
+};
+
+/**
+ * Determina si el usuario tiene privilegios administrativos o de servicio backend
+ * (OPERADOR, ADMIN o cualquier rol de servicio *-be / SERVICIO).
+ * Estos usuarios pueden operar sin restricción de pertenencia a un cliente específico.
+ */
+export const isAuthorizedPrivilegedUser = (user?: JwtUserPayload): boolean => {
+  if (!user || !Array.isArray(user.roles)) return false;
+  return user.roles.some((role) => {
+    const normalized = role.trim().toLowerCase();
+    return (
+      normalized === 'operador' ||
+      normalized === 'admin' ||
+      normalized === 'administrador' ||
+      isServiceRole(role)
+    );
+  });
+};
+
 export const requireRoles = (allowedRoles: UserRole[]) => {
   return (req: Request, _res: Response, next: NextFunction): void => {
     if (!req.user) {
@@ -145,6 +201,13 @@ export const requireRoles = (allowedRoles: UserRole[]) => {
       );
     }
 
+    // 1. Si la ruta admite algún rol de servicio y el usuario posee un rol de servicio, autorizar
+    const routeAllowsService = allowedRoles.some((ar) => isServiceRole(ar));
+    if (routeAllowsService && isServiceUser(req.user)) {
+      return next();
+    }
+
+    // 2. Coincidencia directa (case-insensitive) con la lista de roles permitidos
     const hasRole = req.user.roles.some((userRole) =>
       allowedRoles.some(
         (allowed) =>

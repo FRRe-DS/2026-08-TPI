@@ -1,7 +1,14 @@
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
-import { authenticateToken, requireRoles, extractAndNormalizeRoles } from '../../src/middlewares/auth';
+import {
+  authenticateToken,
+  requireRoles,
+  extractAndNormalizeRoles,
+  isServiceRole,
+  isServiceUser,
+  isAuthorizedPrivilegedUser
+} from '../../src/middlewares/auth';
 import { createTestToken, TEST_KID, testKeyPair } from '../helpers/tokenHelper';
 import { config } from '../../src/config/env';
 import { AppError } from '../../src/types/problem';
@@ -224,6 +231,66 @@ describe('Auth Middleware con Keycloak JWKS (RS256) y Normalización de Roles', 
       const error = nextFunction.mock.calls[0][0] as unknown as AppError;
       expect(error.status).toBe(401);
       expect(error.title).toBe('No autenticado');
+    });
+
+    it('debe permitir acceso a rutas con rol SERVICIO a tokens con roles oficiales *-be (reservas-be, solicitud-be, clientes-be)', () => {
+      // Ruta que requiere SERVICIO (ej: callback M5)
+      const middleware = requireRoles(['SERVICIO']);
+
+      // 1. Probar con reservas-be
+      mockRequest.user = { sub: 'service-account-grupo-08', roles: ['reservas-be'] };
+      middleware(mockRequest as Request, mockResponse as Response, nextFunction);
+      expect(nextFunction).toHaveBeenCalledWith();
+
+      // 2. Probar con solicitud-be
+      mockRequest.user = { sub: 'service-account-grupo-04', roles: ['solicitud-be'] };
+      middleware(mockRequest as Request, mockResponse as Response, nextFunction);
+      expect(nextFunction).toHaveBeenCalledWith();
+
+      // 3. Probar con clientes-be
+      mockRequest.user = { sub: 'service-account-grupo-01', roles: ['clientes-be'] };
+      middleware(mockRequest as Request, mockResponse as Response, nextFunction);
+      expect(nextFunction).toHaveBeenCalledWith();
+    });
+  });
+
+  describe('Reconocimiento Centralizado de Roles de Servicio (Helpers)', () => {
+    it('isServiceRole debe reconocer roles de backend con sufijo -be y rol legacy SERVICIO', () => {
+      expect(isServiceRole('SERVICIO')).toBe(true);
+      expect(isServiceRole('servicio')).toBe(true);
+      expect(isServiceRole('reservas-be')).toBe(true);
+      expect(isServiceRole('solicitud-be')).toBe(true);
+      expect(isServiceRole('clientes-be')).toBe(true);
+      expect(isServiceRole('notificaciones-be')).toBe(true);
+      expect(isServiceRole('cualquier-modulo-be')).toBe(true);
+
+      // Roles no de servicio
+      expect(isServiceRole('CLIENTE')).toBe(false);
+      expect(isServiceRole('CONDUCTOR')).toBe(false);
+      expect(isServiceRole('OPERADOR')).toBe(false);
+      expect(isServiceRole('')).toBe(false);
+    });
+
+    it('isServiceUser debe evaluar correctamente si el usuario tiene rol de servicio', () => {
+      expect(isServiceUser({ sub: '1', roles: ['reservas-be'] })).toBe(true);
+      expect(isServiceUser({ sub: '2', roles: ['solicitud-be'] })).toBe(true);
+      expect(isServiceUser({ sub: '3', roles: ['SERVICIO'] })).toBe(true);
+      expect(isServiceUser({ sub: '4', roles: ['CLIENTE'] })).toBe(false);
+      expect(isServiceUser(undefined)).toBe(false);
+    });
+
+    it('isAuthorizedPrivilegedUser debe autorizar a operadores y servicios backend por igual', () => {
+      expect(isAuthorizedPrivilegedUser({ sub: 'op-1', roles: ['OPERADOR'] })).toBe(true);
+      expect(isAuthorizedPrivilegedUser({ sub: 'op-2', roles: ['operador'] })).toBe(true);
+      expect(isAuthorizedPrivilegedUser({ sub: 'srv-1', roles: ['reservas-be'] })).toBe(true);
+      expect(isAuthorizedPrivilegedUser({ sub: 'srv-2', roles: ['clientes-be'] })).toBe(true);
+      expect(isAuthorizedPrivilegedUser({ sub: 'srv-3', roles: ['solicitud-be'] })).toBe(true);
+      expect(isAuthorizedPrivilegedUser({ sub: 'srv-4', roles: ['SERVICIO'] })).toBe(true);
+
+      // Usuarios regulares no privilegiados
+      expect(isAuthorizedPrivilegedUser({ sub: 'usr-1', roles: ['CLIENTE'] })).toBe(false);
+      expect(isAuthorizedPrivilegedUser({ sub: 'usr-2', roles: ['CONDUCTOR'] })).toBe(false);
+      expect(isAuthorizedPrivilegedUser(undefined)).toBe(false);
     });
   });
 });

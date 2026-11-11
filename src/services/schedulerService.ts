@@ -4,7 +4,7 @@ import { JwtUserPayload } from '../types/auth';
 
 const SYSTEM_USER: JwtUserPayload = {
   sub: 'SISTEMA_SCHEDULER',
-  roles: ['SERVICIO']
+  roles: ['reservas-be', 'SERVICIO']
 };
 
 export class ReservationScheduler {
