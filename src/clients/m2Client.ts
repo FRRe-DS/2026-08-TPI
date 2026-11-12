@@ -17,7 +17,8 @@ export class M2Client {
     try {
       const response = await HttpClient.request<M2EstadoCuentaResponse>(url, {
         method: 'GET',
-        requestId
+        requestId,
+        retries: 2
       });
       return response;
     } catch (err: unknown) {
