@@ -13,6 +13,7 @@ import {
   HistorialEventoDTO
 } from '../types/reservation';
 import { JwtUserPayload } from '../types/auth';
+import { isAuthorizedPrivilegedUser } from '../middlewares/auth';
 import { AppError } from '../types/problem';
 import { config } from '../config/env';
 
@@ -49,8 +50,8 @@ export class ReservationService {
       };
     }
 
-    // 2. Control de Autorización (el cliente solo crea para sí mismo, operadores/servicios pueden crear para otros)
-    const esAdmin = user.roles.includes('OPERADOR') || user.roles.includes('SERVICIO');
+    // 2. Control de Autorización (el cliente solo crea para sí mismo, operadores/servicios autorizados pueden crear para otros)
+    const esAdmin = isAuthorizedPrivilegedUser(user);
     if (!esAdmin && user.sub !== data.clienteId) {
       throw new AppError({
         status: 403,
@@ -163,7 +164,7 @@ export class ReservationService {
    * Listar reservas por cliente
    */
   public static async listarPorCliente(clienteId: string, user: JwtUserPayload): Promise<ReservaDTO[]> {
-    const esAdmin = user.roles.includes('OPERADOR') || user.roles.includes('SERVICIO');
+    const esAdmin = isAuthorizedPrivilegedUser(user);
     if (!esAdmin && user.sub !== clienteId) {
       throw new AppError({
         status: 403,
@@ -188,8 +189,10 @@ export class ReservationService {
       });
     }
 
-    const esAdmin = user.roles.includes('OPERADOR') || user.roles.includes('SERVICIO') || user.roles.includes('CONDUCTOR');
-    if (!esAdmin && user.sub !== reserva.clienteId) {
+    const esAutorizado =
+      isAuthorizedPrivilegedUser(user) ||
+      user.roles.some((r) => r.toUpperCase() === 'CONDUCTOR');
+    if (!esAutorizado && user.sub !== reserva.clienteId) {
       throw new AppError({
         status: 403,
         title: 'Acceso no autorizado',

@@ -1,11 +1,31 @@
-export type UserRole = 'CLIENTE' | 'CONDUCTOR' | 'OPERADOR' | 'SERVICIO';
+export type UserRole =
+  | 'CLIENTE'
+  | 'CONDUCTOR'
+  | 'OPERADOR'
+  | 'SERVICIO'
+  | 'reservas-be'
+  | 'clientes-be'
+  | 'solicitud-be'
+  | (string & {});
+
+export interface KeycloakRealmAccess {
+  roles?: string[];
+}
+
+export interface KeycloakResourceAccess {
+  [clientId: string]: {
+    roles?: string[];
+  };
+}
 
 export interface JwtUserPayload {
   iss?: string;
-  aud?: string;
+  aud?: string | string[];
   sub: string;
   roles: UserRole[];
   exp?: number;
+  realm_access?: KeycloakRealmAccess;
+  resource_access?: KeycloakResourceAccess;
   [key: string]: unknown;
 }
 

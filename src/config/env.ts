@@ -14,6 +14,17 @@ export const config = {
     database: process.env.DB_NAME || 'm9_reservas'
   },
 
+  keycloak: {
+    url: process.env.KEYCLOAK_URL || 'http://localhost:8080',
+    realm: process.env.KEYCLOAK_REALM || 'ds-2026-realm',
+    clientId: process.env.KEYCLOAK_CLIENT_ID || 'grupo-08',
+    clientSecret: process.env.KEYCLOAK_CLIENT_SECRET || 'a57e2c91-6d43-4f08-b315-82c9e7a14630',
+    issuer: process.env.KEYCLOAK_ISSUER || 'http://localhost:8080/realms/ds-2026-realm',
+    jwksUri:
+      process.env.KEYCLOAK_JWKS_URI ||
+      `${process.env.KEYCLOAK_ISSUER || 'http://localhost:8080/realms/ds-2026-realm'}/protocol/openid-connect/certs`
+  },
+
   jwt: {
     secret: process.env.JWT_SECRET || 'clave-secreta-desarrollo-compartida-utn-frre-m9',
     issuer: process.env.JWT_ISSUER || 'utn-frre-arquitectura',

@@ -10,11 +10,15 @@ describe('Activación y Webhook de Despacho hacia M5 (RF-9.9, RF-9.10, RF-9.11)'
   const tokenCliente = createTestToken(clienteId, ['CLIENTE']);
   const tokenOperador = createTestToken('operador-m9', ['OPERADOR']);
   const tokenServicio = createTestToken('m5-despacho', ['SERVICIO']);
+  const tokenM5Solicitud = createTestToken('service-account-grupo-04', ['solicitud-be']);
+  const tokenReservasBe = createTestToken('service-account-grupo-08', ['reservas-be']);
 
   const fechaValida = new Date(Date.now() + 3 * 3600 * 1000).toISOString();
 
   let reserva1Id: string;
   let reserva2Id: string;
+  const solicitudConfirmadaId = `sol-m5-${uuidv4().slice(0, 8)}`;
+  const solicitudVencidaId = `sol-m5-${uuidv4().slice(0, 8)}`;
 
   beforeAll(async () => {
     // Crear reserva 1
@@ -95,7 +99,7 @@ describe('Activación y Webhook de Despacho hacia M5 (RF-9.9, RF-9.10, RF-9.11)'
       .post(`/reservas/${reserva1Id}/despacho`)
       .set('Authorization', `Bearer ${tokenServicio}`)
       .send({
-        solicitud_id: 'sol-m5-9988',
+        solicitud_id: solicitudConfirmadaId,
         resultado: 'CONFIRMADA',
         fecha: new Date().toISOString()
       });
@@ -115,7 +119,7 @@ describe('Activación y Webhook de Despacho hacia M5 (RF-9.9, RF-9.10, RF-9.11)'
       .post(`/reservas/${reserva1Id}/despacho`)
       .set('Authorization', `Bearer ${tokenServicio}`)
       .send({
-        solicitud_id: 'sol-m5-9988',
+        solicitud_id: solicitudConfirmadaId,
         resultado: 'CONFIRMADA',
         fecha: new Date().toISOString()
       });
@@ -124,18 +128,18 @@ describe('Activación y Webhook de Despacho hacia M5 (RF-9.9, RF-9.10, RF-9.11)'
     expect(res.body.mensaje).toContain('Idempotente');
   });
 
-  it('Webhook M5: Resultado VENCIDA transiciona reserva a VENCIDA (200)', async () => {
-    // Activar reserva 2
+  it('Webhook M5: Resultado VENCIDA transiciona reserva a VENCIDA con roles de Keycloak reservas-be y solicitud-be (200)', async () => {
+    // Activar reserva 2 usando rol oficial reservas-be
     await request(app)
       .post(`/reservas/${reserva2Id}/activar`)
-      .set('Authorization', `Bearer ${tokenServicio}`);
+      .set('Authorization', `Bearer ${tokenReservasBe}`);
 
-    // Callback de no conductor disponible (VENCIDA)
+    // Callback de no conductor disponible (VENCIDA) usando rol oficial solicitud-be
     const res = await request(app)
       .post(`/reservas/${reserva2Id}/despacho`)
-      .set('Authorization', `Bearer ${tokenServicio}`)
+      .set('Authorization', `Bearer ${tokenM5Solicitud}`)
       .send({
-        solicitud_id: 'sol-m5-vencida-1',
+        solicitud_id: solicitudVencidaId,
         resultado: 'VENCIDA',
         fecha: new Date().toISOString()
       });

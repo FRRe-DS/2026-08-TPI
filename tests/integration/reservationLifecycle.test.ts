@@ -9,6 +9,8 @@ describe('Ciclo de Vida de Reservas (RF-9.1, RF-9.2, RF-9.3, RF-9.4, RF-9.5, RF-
   const clienteId = 'cliente-test-001';
   const tokenCliente = createTestToken(clienteId, ['CLIENTE']);
   const tokenOperador = createTestToken('operador-admin', ['OPERADOR']);
+  const tokenReservasBe = createTestToken('service-account-grupo-08', ['reservas-be']);
+  const tokenClientesBe = createTestToken('service-account-grupo-01', ['clientes-be']);
 
   const fechaValida = new Date(Date.now() + 4 * 3600 * 1000).toISOString();
 
@@ -188,7 +190,47 @@ describe('Ciclo de Vida de Reservas (RF-9.1, RF-9.2, RF-9.3, RF-9.4, RF-9.5, RF-
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body.length).toBeGreaterThanOrEqual(1);
-    expect(res.body[0].id).toBe(reservaCreadaId);
+    expect(res.body.some((r: any) => r.id === reservaCreadaId)).toBe(true);
+  });
+
+  it('Listar reservas de un cliente con rol de backend reservas-be (200 sin bloqueo por ID)', async () => {
+    const res = await request(app)
+      .get(`/reservas?clienteId=${clienteId}`)
+      .set('Authorization', `Bearer ${tokenReservasBe}`);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThanOrEqual(1);
+    expect(res.body.some((r: any) => r.id === reservaCreadaId)).toBe(true);
+  });
+
+  it('Listar reservas de un cliente con rol de backend clientes-be (200 sin bloqueo por ID)', async () => {
+    const res = await request(app)
+      .get(`/reservas?clienteId=${clienteId}`)
+      .set('Authorization', `Bearer ${tokenClientesBe}`);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('Listar reservas de un cliente con rol OPERADOR (200 sin bloqueo por ID)', async () => {
+    const res = await request(app)
+      .get(`/reservas?clienteId=${clienteId}`)
+      .set('Authorization', `Bearer ${tokenOperador}`);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('Rechazar listado si un CLIENTE intenta consultar reservas de otro cliente ajeno (403)', async () => {
+    const res = await request(app)
+      .get('/reservas?clienteId=otro-cliente-ajeno-999')
+      .set('Authorization', `Bearer ${tokenCliente}`);
+
+    expect(res.status).toBe(403);
+    expect(res.body.detalle).toContain('No tiene permisos para ver las reservas de otro cliente');
   });
 
   it('Consultar reserva por ID (200)', async () => {

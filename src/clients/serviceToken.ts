@@ -13,7 +13,7 @@ export const getServiceToken = (): string => {
       iss: config.jwt.issuer,
       aud: config.jwt.audience,
       sub: 'm9-reservas',
-      roles: ['SERVICIO']
+      roles: ['reservas-be', 'SERVICIO']
     },
     config.jwt.secret,
     { algorithm: 'HS256', expiresIn: '1h' as any }
