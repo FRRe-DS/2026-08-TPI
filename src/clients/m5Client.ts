@@ -37,7 +37,7 @@ export class M5Client {
         },
         body: data,
         requestId,
-        retries: 1 // La activación permite un reintento gracias a la Idempotency-Key
+        retries: 2 // Reintentos progresivos seguros gracias a la Idempotency-Key
       });
       return response;
     } catch (err: unknown) {
