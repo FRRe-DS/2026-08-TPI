@@ -1,0 +1,131 @@
+name: CI - Build, Tests & SAST
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, 'devops/**']
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build, Unit & Integration Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: m9_reservas
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d m9_reservas"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Initialize PostgreSQL schema
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/m9_reservas
+        run: |
+          node -e "
+            const fs = require('fs');
+            const { Pool } = require('pg');
+            (async () => {
+              const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+              const sql = fs.readFileSync('sql/01_init_schema.sql', 'utf8');
+              await pool.query(sql);
+              await pool.end();
+              console.log('Schema initialized successfully.');
+            })().catch((err) => {
+              console.error(err);
+              process.exit(1);
+            });
+          "
+
+      - name: Run unit & integration tests
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/m9_reservas
+        run: npm test -- --coverage
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jest-coverage
+          path: coverage/
+          if-no-files-found: ignore
+
+      - name: Verify Docker image build
+        run: docker build -t m9-reservas:ci .
+
+  sast:
+    name: SAST Security Scan (Semgrep)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Semgrep
+        run: pip install --no-cache-dir semgrep
+
+      - name: Run Semgrep scan (report)
+        run: |
+          semgrep scan \
+            --config p/typescript \
+            --config p/nodejs \
+            --config p/secrets \
+            --json -o semgrep-report.json \
+            .
+          semgrep scan \
+            --config p/typescript \
+            --config p/nodejs \
+            --config p/secrets \
+            .
+
+      - name: Upload Semgrep report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-sast-report
+          path: semgrep-report.json
+          if-no-files-found: ignore
+
+      - name: Quality Gate - Fail on HIGH/ERROR findings
+        run: |
+          semgrep scan \
+            --config p/typescript \
+            --config p/nodejs \
+            --config p/secrets \
+            --severity ERROR \
+            --error \
+            .
+
