@@ -26,14 +26,14 @@
   - Utilizar Semgrep en GitHub Actions como herramienta SAST para evitar dependencias de configuración externa sobre el repositorio.
   - Acordar como criterio de aceptación (Quality Gate) que ningún PR se mergee si falla la compilación, los tests o si existen hallazgos SAST de severidad `ERROR`.
 - **Repositorio / Issue / PR:**
-  - Rama: `devops/ci-pipeline`
+  - Rama: `devops/ci-pipeline` (mergeada en `main`)
   - Archivo agregado: `.github/workflows/ci.yml`
-  - PR / Issue: *[Completar con el enlace al Issue/PR una vez publicado en GitHub]*
+  - PR / Issue: *[Pegar aquí el enlace al PR mergeado en GitHub]*
 - **Evidencia (URL, captura o reporte):**
-  - *[Completar con el enlace a la ejecución en GitHub Actions y artifacts `jest-coverage` / `semgrep-sast-report` tras el push]*
-- **Resultado:** Pipeline de CI y SAST configurado y listo para su validación en GitHub Actions mediante Pull Request.
+  - *[Pegar aquí el enlace a la ejecución exitosa en GitHub Actions y artifacts `jest-coverage` / `semgrep-sast-report`]*
+- **Resultado:** Pipeline de CI y SAST ejecutado con éxito sobre el Pull Request (compilación, tests unitarios/integración con PostgreSQL 16, build Docker y Semgrep en verde) y mergeado a `main`.
 - **Dificultad o bloqueo:** Los tests de integración se conectan a una instancia real de PostgreSQL pero no inicializan las tablas por sí mismos; se resolvió incorporando un paso previo en el workflow que ejecuta `sql/01_init_schema.sql` contra el contenedor de servicio `postgres:16-alpine`.
 - **Siguiente acción:**
-  1. Hacer push de `devops/ci-pipeline`, abrir el Pull Request hacia `main` y verificar la ejecución en GitHub Actions.
-  2. Acordar con Desarrollo las 3 métricas de negocio de M9 y comenzar la instrumentación con OpenTelemetry + dashboard (Hito 2).
+  1. Actualizar la rama `main` local (`git pull origin main`) y crear una nueva rama para observabilidad.
+  2. Acordar con Desarrollo las 3 métricas de negocio de M9 e implementar la instrumentación con OpenTelemetry + dashboard (Hito 2).
 
