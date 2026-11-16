@@ -28,9 +28,9 @@
 - **Repositorio / Issue / PR:**
   - Rama: `devops/ci-pipeline` (mergeada en `main`)
   - Archivo agregado: `.github/workflows/ci.yml`
-  - PR / Issue: *[Pegar aquí el enlace al PR mergeado en GitHub]*
+  - PR / Issue: *[https://github.com/FRRe-DS/2026-08-TPI/pull/48]*
 - **Evidencia (URL, captura o reporte):**
-  - *[Pegar aquí el enlace a la ejecución exitosa en GitHub Actions y artifacts `jest-coverage` / `semgrep-sast-report`]*
+  - *[https://github.com/FRRe-DS/2026-08-TPI/actions/runs/43795001363]*
 - **Resultado:** Pipeline de CI y SAST ejecutado con éxito sobre el Pull Request (compilación, tests unitarios/integración con PostgreSQL 16, build Docker y Semgrep en verde) y mergeado a `main`.
 - **Dificultad o bloqueo:** Los tests de integración se conectan a una instancia real de PostgreSQL pero no inicializan las tablas por sí mismos; se resolvió incorporando un paso previo en el workflow que ejecuta `sql/01_init_schema.sql` contra el contenedor de servicio `postgres:16-alpine`.
 - **Siguiente acción:**
