@@ -1,3 +1,5 @@
+import './telemetry/sdk';
+import { shutdownTelemetry } from './telemetry/sdk';
 import { createApp } from './app';
 import { config } from './config/env';
 import { db } from './config/database';
@@ -28,6 +30,7 @@ const startServer = async () => {
     ReservationScheduler.stop();
     server.close(async () => {
       await db.close();
+      await shutdownTelemetry();
       console.log('Servidor y conexiones a PostgreSQL cerradas.');
       process.exit(0);
     });

@@ -6,6 +6,10 @@ import { DespachoWebhookDTO, ReservaDTO } from '../types/reservation';
 import { JwtUserPayload } from '../types/auth';
 import { isAuthorizedPrivilegedUser } from '../middlewares/auth';
 import { AppError } from '../types/problem';
+import {
+  reservasActivacionDuracionHistogram,
+  reservasActivacionesCounter
+} from '../telemetry/metrics';
 
 export interface ActivarReservaResult {
   reservaId: string;
@@ -57,20 +61,30 @@ export class ActivationService {
     }
 
     // Llamada resiliente a M5 con Idempotency-Key
-    const m5Response = await M5Client.activarSolicitud(
-      {
-        reserva_id: reserva.id,
-        cliente_id: reserva.clienteId,
-        origen: reserva.origen,
-        destino: reserva.destino,
-        tipo_vehiculo: reserva.tipoVehiculo,
-        fecha_hora: reserva.fechaHora,
-        zona_horaria: reserva.zonaHoraria,
-        tarifa_estimada: reserva.tarifaEstimada || 0
-      },
-      reserva.claveIdempotencia,
-      requestId
-    );
+    const inicioActivacion = Date.now();
+    let m5Response;
+    try {
+      m5Response = await M5Client.activarSolicitud(
+        {
+          reserva_id: reserva.id,
+          cliente_id: reserva.clienteId,
+          origen: reserva.origen,
+          destino: reserva.destino,
+          tipo_vehiculo: reserva.tipoVehiculo,
+          fecha_hora: reserva.fechaHora,
+          zona_horaria: reserva.zonaHoraria,
+          tarifa_estimada: reserva.tarifaEstimada || 0
+        },
+        reserva.claveIdempotencia,
+        requestId
+      );
+      reservasActivacionesCounter.add(1, { resultado: 'enviada' });
+      reservasActivacionDuracionHistogram.record(Date.now() - inicioActivacion, { resultado: 'enviada' });
+    } catch (error) {
+      reservasActivacionesCounter.add(1, { resultado: 'error' });
+      reservasActivacionDuracionHistogram.record(Date.now() - inicioActivacion, { resultado: 'error' });
+      throw error;
+    }
 
     // Guardar solicitud_despacho_id en la base de datos (la reserva sigue CONFIRMADA hasta que M5 avise el resultado)
     await ReservationRepository.actualizar(reserva.id, {
@@ -159,6 +173,8 @@ export class ActivationService {
         requestId
       ).catch((err) => console.warn('[M8 Error]', err));
 
+      reservasActivacionesCounter.add(1, { resultado: 'confirmada' });
+
       return {
         mensaje: 'Despacho confirmado y reserva transicionada a ACTIVADA.',
         reservaId: id,
@@ -199,6 +215,8 @@ export class ActivationService {
         },
         requestId
       ).catch((err) => console.warn('[M8 Error]', err));
+
+      reservasActivacionesCounter.add(1, { resultado: 'vencida' });
 
       return {
         mensaje: 'Búsqueda sin conductor y reserva transicionada a VENCIDA.',

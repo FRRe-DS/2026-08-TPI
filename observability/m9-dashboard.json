@@ -1,0 +1,99 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "m9-reservas-observabilidad",
+    "title": "M9 - Reservas de Viajes (Observabilidad DevOps)",
+    "tags": ["devops", "m9", "opentelemetry"],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "refresh": "10s",
+    "time": { "from": "now-15m", "to": "now" },
+    "panels": [
+      {
+        "id": 1,
+        "type": "stat",
+        "title": "Métrica 1: Reservas Creadas (Total)",
+        "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "targets": [
+          { "expr": "sum(reservas_creadas_total)", "legendFormat": "Total", "refId": "A" }
+        ]
+      },
+      {
+        "id": 2,
+        "type": "stat",
+        "title": "Métrica 2: Activaciones hacia M5 (Total)",
+        "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "targets": [
+          { "expr": "sum(reservas_activaciones_total) or vector(0)", "legendFormat": "Activaciones", "refId": "A" }
+        ]
+      },
+      {
+        "id": 3,
+        "type": "stat",
+        "title": "Métrica 3: Cancelaciones (Total)",
+        "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "targets": [
+          { "expr": "sum(reservas_cancelaciones_total)", "legendFormat": "Cancelaciones", "refId": "A" }
+        ]
+      },
+      {
+        "id": 4,
+        "type": "stat",
+        "title": "Métrica 3b: Reprogramaciones (Total)",
+        "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "targets": [
+          { "expr": "sum(reservas_modificaciones_total) or vector(0)", "legendFormat": "Modificaciones", "refId": "A" }
+        ]
+      },
+      {
+        "id": 5,
+        "type": "timeseries",
+        "title": "Métricas de Negocio M9 (Tasa por minuto)",
+        "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "targets": [
+          { "expr": "sum by (resultado) (rate(reservas_creadas_total[1m]) * 60)", "legendFormat": "Creaciones ({{resultado}})/min", "refId": "A" },
+          { "expr": "sum(rate(reservas_cancelaciones_total[1m]) * 60)", "legendFormat": "Cancelaciones/min", "refId": "B" },
+          { "expr": "sum(rate(reservas_modificaciones_total[1m]) * 60)", "legendFormat": "Modificaciones/min", "refId": "C" },
+          { "expr": "sum by (resultado) (rate(reservas_activaciones_total[1m]) * 60)", "legendFormat": "Activaciones ({{resultado}})/min", "refId": "D" }
+        ]
+      },
+      {
+        "id": 6,
+        "type": "timeseries",
+        "title": "Throughput HTTP (Requests/seg)",
+        "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "targets": [
+          { "expr": "sum by (http_request_method, http_route) (rate(http_server_request_duration_seconds_count[1m]))", "legendFormat": "{{http_request_method}} {{http_route}}", "refId": "A" }
+        ]
+      },
+      {
+        "id": 7,
+        "type": "timeseries",
+        "title": "Latencia HTTP p95 (segundos)",
+        "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "targets": [
+          { "expr": "histogram_quantile(0.95, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket[1m])))", "legendFormat": "p95 {{http_route}}", "refId": "A" }
+        ]
+      },
+      {
+        "id": 8,
+        "type": "timeseries",
+        "title": "Errores HTTP (4xx / 5xx) y Salud Event Loop Node.js",
+        "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "targets": [
+          { "expr": "sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{http_response_status_code=~\"4..|5..\"}[1m]))", "legendFormat": "HTTP {{http_response_status_code}}", "refId": "A" },
+          { "expr": "nodejs_eventloop_utilization_ratio", "legendFormat": "Event Loop Utilization", "refId": "B" }
+        ]
+      }
+    ]
+  },
+  "overwrite": true
+}
