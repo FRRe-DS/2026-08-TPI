@@ -56,9 +56,8 @@
   - Enviar el documento de métricas al equipo de Desarrollo para su validación antes de instrumentar OpenTelemetry.
   - Utilizar `USE_EXTERNAL_MOCKS="true"` y un mock JWKS local para validar el rendimiento aislado de M9 sin depender de otros módulos ni de Keycloak externo en esta etapa.
 - **Repositorio / Issue / PR:**
-  - Rama: `devops/k6-local`
+  - Rama: `devops/k6-local` (mergeada en `main`)
   - Archivos agregados: `k6/reservas-load.js`, `k6/jwks-mock.js`, `docker-compose.k6.yml`
-  - PR / Issue: *[Pendiente: abrir PR hacia `main` y completar enlace]*
 - **Evidencia (URL, captura o reporte):**
   - Salida local de Grafana k6 (10 VUs, 15s): `1250/1250` checks OK, `0.00%` `http_req_failed`, `65.56 req/s`, `avg=26.15ms`, `p95=71.9ms`.
 - **Resultado:** Entorno local de k6 en Docker operativo y verificado al 100% sobre la API de M9.
@@ -111,14 +110,12 @@
   - La telemetría se desactiva automáticamente en `NODE_ENV=test` para no afectar los tests unitarios/integración de Jest (`54/54` tests unitarios en verde).
   - La configuración usa variables estándar OTLP (`OTEL_EXPORTER_OTLP_ENDPOINT` y `OTEL_EXPORTER_OTLP_HEADERS`), permitiendo migrar a Grafana Cloud sin cambiar código.
 - **Repositorio / Issue / PR:**
-  - Rama: `devops/opentelemetry`
+  - Rama: `devops/opentelemetry` (mergeada en `main`)
   - Archivos agregados/modificados: `src/telemetry/sdk.ts`, `src/telemetry/metrics.ts`, `src/index.ts`, `src/middlewares/requestId.ts`, `src/services/reservationService.ts`, `src/services/activationService.ts`, `docker-compose.otel.yml`, `observability/m9-dashboard.json`, `package.json`, `package-lock.json`.
-  - PR / Issue: *[Pendiente: abrir PR hacia `main` y completar enlace]*
 - **Evidencia (URL, captura o reporte):**
   - Dashboard `M9 - Reservas de Viajes (Observabilidad DevOps)` operativo en Grafana (`http://localhost:3005`) recibiendo métricas de negocio, métricas HTTP/Node.js y trazas distribuidas en Tempo.
-- **Resultado:** Instrumentación OpenTelemetry y tablero de observabilidad operativos y validados en vivo bajo carga de k6.
+- **Resultado:** Instrumentación OpenTelemetry y tablero de observabilidad operativos, validados en vivo bajo carga de k6 y mergeados en `main`.
 - **Dificultad o bloqueo:** Inicialmente se usó la propiedad `metricReader` en `NodeSDK`, que falló en TypeScript por cambio de API en la versión instalada; se corrigió a `metricReaders: [...]`.
 - **Siguiente acción:**
-  1. Abrir el PR de `devops/opentelemetry` hacia `main` y validarlo con Desarrollo.
-  2. Desplegar el servicio en entorno cloud conectado a Grafana Cloud y ejecutar la batería final de k6 (50, 100, 500 y 1000 VUs).
+  1. Desplegar el servicio en entorno cloud conectado a Grafana Cloud y ejecutar la batería final de k6 (50, 100, 500 y 1000 VUs).
 
