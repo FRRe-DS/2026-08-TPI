@@ -67,3 +67,27 @@
   1. Confirmar las 3 métricas con el equipo de Desarrollo.
   2. Instrumentar OpenTelemetry + dashboard en plataforma APM (Hito 2) y preparar el despliegue cloud para los escenarios de 50, 100, 500 y 1000 VUs (Hito 3).
 
+---
+
+### Entrada 3 — 20/11/2026 (Hito 3: Corridas locales de carga con Grafana k6 a 50, 100 y 500 VUs)
+
+- **Fecha:** 20/11/2026
+- **Responsable/s:** Equipo DevOps (Grupo 03)
+- **Módulo:** M9 — Reservas de Viajes
+- **Objetivo:** Ejecutar pruebas de carga progresivas en entorno Docker local (50, 100 y 500 VUs, 20s c/u) para observar el comportamiento de latencia, throughput y punto de saturación antes del despliegue cloud.
+- **Tarea ejecutada:**
+  - Se levantó el stack completo (`db-k6`, `jwks-mock`, `api-k6`) mediante `docker-compose.k6.yml` y se ejecutaron tres corridas consecutivas con `grafana/k6:latest`:
+    - **50 VUs (20s):** `2490` requests (`117.94 req/s`), `0.00%` errores, `100%` checks (`3050/3050`), `avg = 293.65 ms`, `p95 = 829.75 ms`, `max = 1.87 s`.
+    - **100 VUs (20s):** `4416` requests (`208.43 req/s`), `0.00%` errores, `100%` checks (`5395/5395`), `avg = 345.77 ms`, `p95 = 854.23 ms`, `max = 1.68 s`.
+    - **500 VUs (20s):** `5408` requests (`213.21 req/s`), `0.00%` errores, `100%` checks (`6135/6135`), `avg = 2.04 s`, `p95 = 5.33 s`, `max = 8.04 s` (se cruzó el umbral `p95 < 2000 ms`).
+- **Decisiones / acuerdos con Desarrollo:**
+  - Documentar los resultados comparativos en `Resultados_k6_Local_M9_DevOps.pdf` para compartir con Desarrollo.
+- **Repositorio / Issue / PR:**
+  - Rama: `devops/k6-local`
+- **Evidencia (URL, captura o reporte):**
+  - Reporte comparativo local: `Resultados_k6_Local_M9_DevOps.pdf`.
+- **Resultado:** El servicio soportó hasta 500 VUs sin errores HTTP (`0.00%`), observándose saturación del throughput alrededor de `~213 req/s` a 500 VUs (con aumento de `p95` a `5.33 s`).
+- **Dificultad o bloqueo:** Ninguna en la ejecución local; queda pendiente la ejecución en entorno cloud incluyendo el escenario de 1000 VUs.
+- **Siguiente acción:**
+  1. Cerrar acuerdo de métricas con Desarrollo, instrumentar OpenTelemetry y ejecutar los 4 escenarios (50, 100, 500, 1000 VUs) en cloud.
+
