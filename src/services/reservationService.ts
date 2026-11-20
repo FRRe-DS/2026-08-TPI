@@ -16,6 +16,11 @@ import { JwtUserPayload } from '../types/auth';
 import { isAuthorizedPrivilegedUser } from '../middlewares/auth';
 import { AppError } from '../types/problem';
 import { config } from '../config/env';
+import {
+  reservasCancelacionesCounter,
+  reservasCreadasCounter,
+  reservasModificacionesCounter
+} from '../telemetry/metrics';
 
 export class ReservationService {
   /**
@@ -34,6 +39,7 @@ export class ReservationService {
       if (reserva && reserva.clienteId) {
         this.validarCoincidenciaIdempotencia(reserva, data);
       }
+      reservasCreadasCounter.add(1, { resultado: 'repetida', tipoVehiculo: data.tipoVehiculo });
       return {
         reserva,
         esRepeticion: true
@@ -153,6 +159,8 @@ export class ReservationService {
 
     // 10. Cachear en Idempotencia
     await IdempotencyRepository.guardar(data.claveIdempotencia, '/reservas', 201, reservaCreada);
+
+    reservasCreadasCounter.add(1, { resultado: 'creada', tipoVehiculo: data.tipoVehiculo });
 
     return {
       reserva: reservaCreada,
@@ -342,6 +350,8 @@ export class ReservationService {
       requestId
     ).catch((err) => console.warn('[M8 Error]', err));
 
+    reservasModificacionesCounter.add(1, { tipoVehiculo: reservaActualizada.tipoVehiculo });
+
     return reservaActualizada;
   }
 
@@ -442,6 +452,8 @@ export class ReservationService {
       },
       requestId
     ).catch((err) => console.warn('[M8 Error]', err));
+
+    reservasCancelacionesCounter.add(1, { cancelacionTardia: String(esCancelacionTardia) });
 
     return reservaCancelada;
   }

@@ -91,3 +91,34 @@
 - **Siguiente acción:**
   1. Cerrar acuerdo de métricas con Desarrollo, instrumentar OpenTelemetry y ejecutar los 4 escenarios (50, 100, 500, 1000 VUs) en cloud.
 
+---
+
+### Entrada 4 — 20/11/2026 (Hito 2: Instrumentación OpenTelemetry y Dashboard en Grafana)
+
+- **Fecha:** 20/11/2026
+- **Responsable/s:** Equipo DevOps (Grupo 03)
+- **Módulo:** M9 — Reservas de Viajes
+- **Objetivo:** Instrumentar el backend con OpenTelemetry (trazas y las 3 métricas propias de M9), configurar la exportación OTLP hacia Grafana y validar en vivo el dashboard durante una ejecución de Grafana k6.
+- **Tarea ejecutada:**
+  1. **SDK OpenTelemetry y auto-instrumentación:** Se agregaron `src/telemetry/sdk.ts` y `src/telemetry/metrics.ts`, inicializando `@opentelemetry/sdk-node` al arranque (`src/index.ts`) con exportación OTLP/HTTP (cada 10s), auto-instrumentación para Express, PostgreSQL (`pg`) y HTTP, y correlación de `X-Request-Id` en `src/middlewares/requestId.ts` (`http.request_id`).
+  2. **Tres métricas de negocio de M9:** Se instrumentaron en `ReservationService` y `ActivationService`:
+     - `reservas_creadas_total` (`creada` / `repetida`, por `tipoVehiculo`).
+     - `reservas_activaciones_total` y `reservas_activacion_duracion_ms` (hacia M5 y webhook).
+     - `reservas_cancelaciones_total` y `reservas_modificaciones_total`.
+  3. **Stack local Grafana + OTel y Dashboard:** Se creó `docker-compose.otel.yml` (`grafana/otel-lgtm` + PostgreSQL + `jwks-mock` + API) y `observability/m9-dashboard.json` con 8 paneles (las 3 métricas propias, RPS por ruta, latencia `p95`, errores HTTP y utilización del Event Loop de Node.js).
+  4. **Validación en vivo con k6:** Con el stack levantado, se corrió una carga con k6 (`50 VUs`, `30s` → `1.400` iteraciones, `5.650` requests a `184,74 req/s`, `0,00%` errores, `p95 = 461,78 ms`) verificando la actualización en tiempo real del dashboard (`1.531` reservas creadas/canceladas totales) y trazas en Tempo.
+- **Decisiones / acuerdos con Desarrollo:**
+  - La telemetría se desactiva automáticamente en `NODE_ENV=test` para no afectar los tests unitarios/integración de Jest (`54/54` tests unitarios en verde).
+  - La configuración usa variables estándar OTLP (`OTEL_EXPORTER_OTLP_ENDPOINT` y `OTEL_EXPORTER_OTLP_HEADERS`), permitiendo migrar a Grafana Cloud sin cambiar código.
+- **Repositorio / Issue / PR:**
+  - Rama: `devops/opentelemetry`
+  - Archivos agregados/modificados: `src/telemetry/sdk.ts`, `src/telemetry/metrics.ts`, `src/index.ts`, `src/middlewares/requestId.ts`, `src/services/reservationService.ts`, `src/services/activationService.ts`, `docker-compose.otel.yml`, `observability/m9-dashboard.json`, `package.json`, `package-lock.json`.
+  - PR / Issue: *[Pendiente: abrir PR hacia `main` y completar enlace]*
+- **Evidencia (URL, captura o reporte):**
+  - Dashboard `M9 - Reservas de Viajes (Observabilidad DevOps)` operativo en Grafana (`http://localhost:3005`) recibiendo métricas de negocio, métricas HTTP/Node.js y trazas distribuidas en Tempo.
+- **Resultado:** Instrumentación OpenTelemetry y tablero de observabilidad operativos y validados en vivo bajo carga de k6.
+- **Dificultad o bloqueo:** Inicialmente se usó la propiedad `metricReader` en `NodeSDK`, que falló en TypeScript por cambio de API en la versión instalada; se corrigió a `metricReaders: [...]`.
+- **Siguiente acción:**
+  1. Abrir el PR de `devops/opentelemetry` hacia `main` y validarlo con Desarrollo.
+  2. Desplegar el servicio en entorno cloud conectado a Grafana Cloud y ejecutar la batería final de k6 (50, 100, 500 y 1000 VUs).
+
